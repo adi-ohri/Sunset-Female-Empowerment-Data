@@ -1,0 +1,99 @@
+India Time Use Survey 1998-99: person-level dataset
+
+Builds a person-level file from the NSSO pilot Time Use Survey (Schedule TUS 1.0, July 1998 to June 1999), covering Haryana, Madhya Pradesh, Gujarat, Orissa, Tamil Nadu and Meghalaya.
+
+What the script does
+
+build_person_dataset.py reads two of the survey's four blocks:
+
+Block 0 and 1 — one record per household: identification plus household characteristics (size, religion, social group, land, expenditure, type of structure, disabled members).
+Block 2 — one record per household member: sex, age, relation to head, marital status, education, principal activity status.
+
+It joins them on the 11-digit household key, so every person carries the characteristics of the household they live in, and decodes the numeric survey codes into readable labels using the official NSSO code lists.
+
+Output: output/person_level_TUS_1998.csv, 77,593 rows, 28 columns.
+
+Running it
+pip install pandas
+python build_person_dataset.py
+
+Expects TUS_1998_CSV.zip in a data/ folder next to the script. The zip is read directly, so there is no need to unpack it.
+
+Columns
+Column	Source	Notes
+person_id	Block 2	13 digits: household key + member number
+household_id	Block 2	11 digits, joins to Block 0/1
+member_no	Block 2	Serial number within the household
+state	Block 0	Six surveyed states
+district_code	Block 0	NSS district code, numeric within state
+state_district	derived	Unique district label, since codes repeat across states
+district_class	Block 0	NSS district class
+tehsil_town_code	Block 0	Tehsil or town within district
+stratum_code	Block 0	Sampling stratum
+village_block_code	Block 0	Village or urban block serial
+sub_block_code	Block 0	Hamlet group or sub-block
+sector	Block 0	Rural or Urban
+sex	Block 2 c4	Male or Female
+age	Block 2 c5	Years
+relation_to_head	Block 2 c3	Nine categories
+marital_status	Block 2 c6	
+education	Block 2 c8	Thirteen levels
+principal_activity	Block 2 c9	Usual principal activity status
+disabled	Block 2 c7	Person-level
+participates_in_decisions	Block 2 c15	
+household_size	Block 1 q1	
+household_type	Block 1 q3	Separate rural and urban code sets
+hh_industry_occupation_code	Block 1 q2	Six-digit NIC/NCO, not decoded
+religion	Block 1 q4	
+social_group	Block 1 q5	ST, SC, Others
+homestead	Block 1 q6	
+land_owned_acres	Block 1 q7	
+land_possessed_acres	Block 1 q8	
+monthly_hh_expenditure_rs	Block 1 q9	Rupees, 1998-99 prices
+monthly_percapita_expenditure_rs	Block 1 q10	
+structure_type	Block 1 q11	Kutcha, semi-pucca, pucca
+disabled_persons_in_hh	Block 1 q12	Household count
+weight_state	Block 0	Combined multiplier, state level
+weight_district	Block 0	Combined multiplier, district level
+Two things to know before using it
+
+Weights. The sample is not self-weighting. Unweighted counts describe the sample, not the population. For any population estimate, weight by weight_state (or weight_district for district-level work).
+
+Duplicates. Fifteen person records appear twice in the source Block 2 file. They are left in as-is rather than silently dropped. Deduplicate with df.drop_duplicates("person_id") if your analysis needs unique persons.
+
+The time diary
+
+build_activity_dataset.py adds Block 3, the diary itself. Run it after build_person_dataset.py. It streams the 3.17 million activity records in chunks, so it runs on a normal laptop.
+
+It writes three files:
+
+activity_episodes_TUS_1998.csv.gz — the granular file. One row per activity episode, 3,170,534 rows, gzipped to about 20 MB. Columns: person and household ids, sex, age, state, district, sector, day type, hour slot, activity serial, hour from and to, minutes, activity code, activity division, SNA group, whether simultaneous, within or outside the household, mode of payment, and weights. Read it with pd.read_csv(path); pandas handles the gzip automatically.
+
+person_day_division_minutes.csv — 302,622 rows of person by day type by division totals, in long format.
+
+person_activity_summary_TUS_1998.csv — 63,173 rows, one per person, minutes in each of the nine divisions on their normal day, joined to all the demographic and household columns above.
+
+Diary conventions
+The diary day runs 4 am to 4 am, in 24 one-hour slots.
+Each person was recorded for up to three day types: normal (2,206,337 episodes), weekly variant (884,073) and abnormal (80,124).
+Minutes on a normal day sum to exactly 1440 for every person bar one (2956700060102, whose diary is duplicated in the source).
+Activities can be simultaneous; the simultaneous_activity flag marks those, and the survey split the minutes between them rather than double-counting, which is why the totals close at 1440.
+Activity codes
+
+The three-digit activity code is kept raw in activity_code, because the code descriptions live in the NSS instruction manual and not in these data files. Only the nine major divisions (the first digit) are labelled, in activity_division:
+
+Primary production
+Secondary production
+Trade, business and services
+Household maintenance, management and shopping
+Care of children, the sick, elderly and disabled
+Community services and help to other households
+Learning
+Social, cultural and recreational activity
+Personal care and self-maintenance
+
+sna_group collapses these further: divisions 1 to 3 fall inside the System of National Accounts production boundary, 4 to 6 are unpaid work outside it, and 7 to 9 are not production at all. This grouping is the basis of most published analysis of the survey. Verify the division labels against the survey manual before publishing anything from them.
+
+Data source
+
+National Sample Survey Organisation, Ministry of Statistics and Programme Implementation, Government of India. The raw survey files are not stored in this repository.
